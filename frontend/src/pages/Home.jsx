@@ -1,116 +1,155 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import Recorder from "../components/Recorder";
 import FileUploader from "../components/FileUploader";
-import TranscriptionBox from "../components/TranscriptionBox";
 import TranscriptionList from "../components/TranscriptionList";
-import AudioPlayer from "../components/AudioPlayer";
-import { fetchTranscriptions, uploadFile, getFileUrl, clearTranscriptions } from "../services/api";
+import {
+  fetchTranscriptions,
+  uploadFile,
+  clearAll,
+  clearLatest,
+} from "../services/api";
 
-function Home() {
-  const [transcription, setTranscription] = useState(null);
-  // const [latestTranscription, setLatestTranscription] = useState(null);
-  const [list, setList] = useState([]);
-  const audioRef = useRef();
+export default function Home() {
+  const [latest, setLatest] = useState(null);
+  const [transcriptions, setTranscriptions] = useState([]);
+  const [isTranscribing, setIsTranscribing] = useState(false); // ⏳ new state
 
   useEffect(() => {
-    loadList();
+    loadTranscriptions();
   }, []);
 
-  const loadList = async () => {
+  async function loadTranscriptions() {
     try {
       const data = await fetchTranscriptions();
-      setList(data);
+      setTranscriptions(data);
+      setLatest(data.length > 0 ? data[0] : null);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to fetch transcriptions", err);
     }
-  };
-
-  const handleUpload = async (blobOrFile, filename) => {
-    setTranscription({ loading: true });
-    try {
-      const data = await uploadFile(blobOrFile, filename);
-      if (data?.transcription) {
-        setTranscription(data.transcription);
-        loadList();
-      } else {
-        setTranscription({ error: data?.error || "Unknown error" });
-      }
-    } catch (err) {
-      setTranscription({ error: err.message });
-    }
-  };
-
-  const playAudio = (filename) => {
-    const url = getFileUrl(filename);
-    audioRef.current.src = url;
-    audioRef.current.play();
-  };
-
-  const handleLatestTranscription = async () => {
-    await clearTranscriptions();
-    setTranscription([]);         // clears the latest trasncription
-  };
-
-  const handleRecentTrasncription = async () => {
-    await clearTranscriptions();
-    setList([]); // clears recent transcriptions
   }
 
+  async function handleUpload(file) {
+    try {
+      setIsTranscribing(true); // show loader
+      const uploaded = await uploadFile(file);
+      console.log("📥 Upload response from backend:", uploaded);
+      setLatest(uploaded);
+      setTranscriptions((prev) => [uploaded, ...prev]);
+    } catch (err) {
+      console.error("Upload failed:", err);
+    } finally {
+      setIsTranscribing(false); // hide loader
+    }
+  }
+
+  async function handleClearLatest() {
+    await clearLatest();
+    await loadTranscriptions();
+  }
+
+  async function handleClearAll() {
+    await clearAll();
+    setLatest(null);
+    setTranscriptions([]);
+  }
+
+    const handleLogout = () => {
+    localStorage.removeItem("token"); // remove JWT
+    window.location.reload();         // force re-render -> App.jsx shows AuthForm
+  };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center py-10 px-4">
-      {/* Header */}
-      <h1 className="text-4xl font-extrabold text-gray-800 mb-8">
-        🎙️ Speech <span className="text-blue-600">→</span> Text
-      </h1>
 
-      {/* Controls */}
-      <div className="bg-white shadow-xl rounded-2xl p-6 w-full max-w-3xl mb-8">
-        
-        <div className="flex flex-wrap gap-4">
-          <Recorder onUpload={handleUpload} />
-          <FileUploader onUpload={handleUpload} />
+
+     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-6">
+      {/* Top bar with logout */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Speech-to-Text Dashboard</h1>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium"
+        >
+          Logout
+        </button>
+      </div>
+
+      {/* --- rest of your Home.jsx content here --- */}
+
+<div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-6">
+      <div className="max-w-3xl mx-auto bg-gray-900 bg-opacity-60 rounded-xl shadow-lg border border-purple-500/30 p-6">
+        <h1 className="text-2xl font-bold text-purple-400 mb-4 text-center">
+          Speech-to-Text Dashboard
+        </h1>
+
+        {/* Controls */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <Recorder onUpload={handleUpload} disabled={isTranscribing} />
+          <FileUploader onUpload={handleUpload} disabled={isTranscribing} />
+
           <button
-            onClick={handleLatestTranscription}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow"
+            onClick={handleClearLatest}
+            disabled={!latest || isTranscribing}
+            className={`px-4 py-2 rounded-md ${
+              latest && !isTranscribing
+                ? "bg-red-600 hover:bg-red-700"
+                : "bg-gray-700 cursor-not-allowed"
+            }`}
           >
-            ❌ Clear
+            Clear Latest
           </button>
 
-
-        </div>
-      </div>
-
-      {/* Latest Transcription */}
-      <div className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-3xl mb-8">
-        <h2 className="text-xl font-semibold text-gray-700 mb-3">✨ Latest Transcription</h2>
-        <TranscriptionBox transcription={transcription || list[0]} />
-      </div>
-
-      {/* Recent Transcriptions */}
-      <div className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-3xl">
-        <div className="flex gap-4">
-          <h2 className="text-xl font-semibold text-gray-700 mb-3">📜 Recent Transcriptions</h2>
           <button
-            onClick={handleRecentTrasncription}
-            className="px-2 py-1  bg-red-500 text-white rounded-lg hover:bg-gray-600 transition shadow"
+            onClick={handleClearAll}
+            disabled={transcriptions.length === 0 || isTranscribing}
+            className={`px-4 py-2 rounded-md ${
+              transcriptions.length > 0 && !isTranscribing
+                ? "bg-red-600 hover:bg-red-700"
+                : "bg-gray-700 cursor-not-allowed"
+            }`}
           >
-            Remove
+            Clear All
           </button>
         </div>
-        <TranscriptionList list={list.slice(1)} playAudio={playAudio} />
+
+        {/* Loader */}
+        {isTranscribing && (
+          <div className="flex items-center justify-center mb-6">
+            <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-purple-400 border-opacity-75 mr-2"></div>
+            <span className="text-purple-300">Transcribing...</span>
+          </div>
+        )}
+
+        {/* Latest */}
+        {latest && (
+          <div className="mb-6 p-4 rounded-lg border border-purple-500/40 bg-gray-800 bg-opacity-70">
+            <h2 className="text-lg font-semibold text-purple-300 mb-2">
+              Latest Transcription
+            </h2>
+            <p className="text-gray-200 max-h-40 overflow-y-auto whitespace-pre-wrap">
+              {latest.text}
+            </p>
+            {latest.filePath && (
+              <audio
+                controls
+                src={`http://localhost:5000/${latest.filePath}`}
+                className="w-full mt-2"
+              />
+            )}
+          </div>
+        )}
+
+        {/* Recent */}
+        <div>
+          <h2 className="text-lg font-semibold text-purple-300 mb-3">
+            Recent Transcriptions
+          </h2>
+          <TranscriptionList transcriptions={transcriptions.slice(1)} />
+        </div>
       </div>
-
-      {/* Audio Player */}
-      {/* Mini Audio Player - Fixed Bottom */}
-      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[90%] max-w-md z-50">
-        <AudioPlayer audioRef={audioRef} />
-      </div>
-
-
+    </div>
 
     </div>
+    
+    
   );
 }
-
-export default Home;

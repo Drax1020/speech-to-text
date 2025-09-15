@@ -1,3 +1,4 @@
+// controllers/transcriptionController.js
 const fs = require("fs");
 const path = require("path");
 const pdfParse = require("pdf-parse");
@@ -6,114 +7,137 @@ const Transcription = require("../models/Transcription");
 
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 
-// Upload + Handle Any File
+// ------------------ Upload & Transcribe ------------------
 exports.uploadFile = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    console.log("File received:", req.file);
+    const filePath = path.join(__dirname, "..", "uploads", req.file.filename);
+    const mimeType = req.file.mimetype;
+    console.log("📂 Uploaded file:", req.file);
 
-    const ext = path.extname(req.file.originalname).toLowerCase();
-    let transcriptionText = "";
+    let text = "";
+    let provider = "local-parser";
+    let audioUrl = null;
 
-    // 🎤 AUDIO/VIDEO → Deepgram
-    if ([".mp3", ".wav", ".ogg", ".mp4", ".m4a", ".webm"].includes(ext)) {
+    // AUDIO/VIDEO (Deepgram)
+    if (mimeType.startsWith("audio/") || mimeType.startsWith("video/")) {
       try {
-        const response = await deepgram.listen.prerecorded.transcribeFile(
-          fs.createReadStream(req.file.path),
-          { model: "nova-3" }
-        );
+        const buffer = fs.readFileSync(filePath);
 
-        transcriptionText =
-          response.result?.results?.channels?.[0]?.alternatives?.[0]?.transcript ||
-          "[No transcription found]";
+        const dgResponse = await deepgram.listen.prerecorded.transcribeFile(buffer, {
+          model: "nova-2",
+          mimetype: mimeType,
+        });
+
+        console.log("🎤 Deepgram response:", JSON.stringify(dgResponse, null, 2));
+
+        text = dgResponse?.result?.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
+        provider = "deepgram";
+        // audioUrl = `/uploads/${req.file.filename}`;
+        audioUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`
       } catch (err) {
-        console.error("Deepgram transcription error:", err);
-        return res.status(500).json({ error: "Deepgram transcription failed", details: err.message });
+        console.error("❌ Deepgram error:", err);
+        return res.status(500).json({ error: "Deepgram transcription failed" });
       }
     }
 
-    // 📝 TXT
-    else if (ext === ".txt") {
+    // PDF
+    else if (mimeType === "application/pdf") {
       try {
-        transcriptionText = fs.readFileSync(req.file.path, "utf8");
+        const buffer = fs.readFileSync(filePath);
+        const pdfData = await pdfParse(buffer);
+        text = pdfData.text.trim() || "[No text extracted from PDF]";
       } catch (err) {
-        console.error("TXT parse error:", err);
-        return res.status(500).json({ error: "TXT parsing failed", details: err.message });
+        console.error("❌ PDF parse error:", err);
+        return res.status(500).json({ error: "Failed to parse PDF" });
+      } finally {
+        fs.unlinkSync(filePath); // cleanup
       }
     }
 
-    // 📄 PDF
-    else if (ext === ".pdf") {
+    // TXT
+    else if (mimeType === "text/plain") {
       try {
-        const dataBuffer = fs.readFileSync(req.file.path);
-        const pdfData = await pdfParse(dataBuffer);
-        transcriptionText = pdfData.text || "[No text found in PDF]";
+        text = fs.readFileSync(filePath, "utf-8").trim() || "[Empty text file]";
       } catch (err) {
-        console.error("PDF parse error:", err);
-        return res.status(500).json({ error: "PDF parsing failed", details: err.message });
+        console.error("❌ TXT read error:", err);
+        return res.status(500).json({ error: "Failed to read TXT file" });
+      } finally {
+        fs.unlinkSync(filePath); // cleanup
       }
     }
 
-    // ❓ Other File Types
     else {
-      transcriptionText = "[File uploaded but not transcribed]";
+      fs.unlinkSync(filePath); // cleanup unknown files
+      return res.status(400).json({ error: "Unsupported file type" });
     }
 
-    // Save in DB
-    const newDoc = new Transcription({
-      text: transcriptionText,
-      filename: req.file.filename,
-      provider: ext === ".pdf" || ext === ".txt" ? "local-parser" : "deepgram",
-      createdAt: new Date(),
+    // Save to DB
+    const newTranscription = new Transcription({
+      text,
+      provider,
+      audioUrl,
+    });
+    await newTranscription.save();
+
+    console.log("✅ Saved transcription:", newTranscription);
+
+    return res.json({
+      id: newTranscription._id,
+      text: newTranscription.text,
+      provider: newTranscription.provider,
+      audioUrl: newTranscription.audioUrl,
     });
 
-    await newDoc.save();
-
-    res.json({
-      message: "File uploaded & processed",
-      transcription: newDoc,
-    });
   } catch (err) {
-    console.error("Upload error:", err);
-    res.status(500).json({ error: err.message || "Upload failed" });
+    console.error("❌ Upload error:", err);
+    return res.status(500).json({ error: "Upload failed" });
   }
 };
 
-// List all files/transcriptions
+// ------------------ Get All ------------------
 exports.listTranscriptions = async (req, res) => {
   try {
-    const docs = await Transcription.find().sort({ createdAt: -1 });
-    res.json(docs);
+    const items = await Transcription.find().sort({ createdAt: -1 });
+    return res.json(items);
   } catch (err) {
-    console.error("List error:", err);
-    res.status(500).json({ error: "Failed to fetch transcriptions" });
+    return res.status(500).json({ error: "Failed to fetch transcriptions" });
   }
 };
 
-// Get single file/transcription
+// ------------------ Get One ------------------
 exports.getTranscription = async (req, res) => {
   try {
-    const doc = await Transcription.findById(req.params.id);
-    if (!doc) {
-      return res.status(404).json({ error: "File/Transcription not found" });
-    }
-    res.json(doc);
+    const item = await Transcription.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: "Not found" });
+    return res.json(item);
   } catch (err) {
-    console.error("Get error:", err);
-    res.status(500).json({ error: "Failed to fetch transcription" });
+    return res.status(500).json({ error: "Failed to fetch transcription" });
   }
 };
 
-exports.clearAllTranscriptions = async (req, res) => {
+// ------------------ Clear Latest ------------------
+exports.clearLatest = async (req, res) => {
+  try {
+    const latest = await Transcription.findOne().sort({ createdAt: -1 });
+    if (!latest) return res.json({ message: "No transcription to delete" });
+
+    await Transcription.findByIdAndDelete(latest._id);
+    return res.json({ message: "Latest transcription deleted" });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to delete latest transcription" });
+  }
+};
+
+// ------------------ Clear All ------------------
+exports.clearAll = async (req, res) => {
   try {
     await Transcription.deleteMany({});
-    res.json({ message: "All transcriptions cleared" });
+    return res.json({ message: "All transcriptions deleted" });
   } catch (err) {
-    console.error("Clear error:", err);
-    res.status(500).json({ error: "Failed to clear transcriptions" });
+    return res.status(500).json({ error: "Failed to delete all transcriptions" });
   }
 };
-

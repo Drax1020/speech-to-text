@@ -16,6 +16,14 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // routes
 app.use('/api/transcriptions', transcriptionsRoute);
 
+const passport = require("passport");
+require("./config/passport");
+
+// auth routes
+const authRoutes = require("./routes/auth");
+app.use("/api/auth", authRoutes);
+
+
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/speechtotext';
 

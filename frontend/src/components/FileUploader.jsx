@@ -9,7 +9,7 @@ function FileUploader({ onUpload }) {
   return (
    <label className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg shadow-md cursor-pointer flex items-center gap-2 transition">
   📁 Upload
-  {/* <input type="file" accept="audio/*" className="hidden" onChange={handleChange} /> */}
+  
   <input
   type="file"
   name="file"

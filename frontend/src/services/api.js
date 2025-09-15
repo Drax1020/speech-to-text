@@ -14,7 +14,6 @@ export async function fetchTranscriptions() {
 // ✅ Upload File
 export async function uploadFile(file, filename = file.name) {
   const formData = new FormData();
-  // formData.append("audio", file, filename);
   formData.append("file", file, filename);
 
 
@@ -44,7 +43,17 @@ export function getFileUrl(filename) {
   return `http://localhost:5000/uploads/${filename}`;
 }
 
-export async function clearTranscriptions() {
-  const res = await fetch(`${API_BASE}/transcriptions/clear`, { method: "DELETE" });
+
+export async function clearLatest() {
+  const res = await fetch(`${API_BASE}/transcriptions/clear-latest`, {
+    method: "DELETE",
+  });
+  return res.json();
+}
+
+export async function clearAll() {
+  const res = await fetch(`${API_BASE}/transcriptions/clear-all`, {
+    method: "DELETE",
+  });
   return res.json();
 }

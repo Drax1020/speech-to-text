@@ -5,6 +5,7 @@ const FILE_BASE = import.meta.env.VITE_FILE_BASE || "http://localhost:5000/uploa
 
 // ✅ Get all transcriptions
 export async function fetchTranscriptions() {
+  console.log("📤 Fetching transcriptions from:", `${API_BASE}/transcriptions`);
   const res = await fetch(`${API_BASE}/transcriptions`);
   if (!res.ok) {
     throw new Error(`Failed to fetch transcriptions: ${res.status}`);

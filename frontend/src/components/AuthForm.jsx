@@ -23,17 +23,25 @@ export default function AuthForm({ onAuth }) {
     }
 
     try {
+      // const endpoint =
+      //   mode === "login" ? "/api/auth/login" : "/api/auth/signup";
+
+      const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+
       const endpoint =
-        mode === "login" ? "/api/auth/login" : "/api/auth/signup";
+        mode === "login"
+          ? `${API_BASE}/auth/login`
+          : `${API_BASE}/auth/signup`;
+
 
       const body =
         mode === "login"
           ? { email: form.email, password: form.password }
           : {
-              fullName: form.fullName,
-              email: form.email,
-              password: form.password,
-            };
+            fullName: form.fullName,
+            email: form.email,
+            password: form.password,
+          };
 
       // 🔹 Log outgoing payload
       console.log("📤 Sending request to:", endpoint);

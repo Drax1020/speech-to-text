@@ -1,7 +1,7 @@
-// routes/transcriptions.js
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
 const {
   uploadFile,
   listTranscriptions,
@@ -12,10 +12,16 @@ const {
 
 const router = express.Router();
 
+// ✅ Ensure uploads folder exists (safety check here too)
+const uploadsPath = path.join(__dirname, "..", "uploads");
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath);
+}
+
 // Multer storage setup
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, "..", "uploads"));
+    cb(null, uploadsPath);
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + "-" + file.originalname);

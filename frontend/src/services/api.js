@@ -1,6 +1,7 @@
 // src/services/api.js
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+const FILE_BASE = import.meta.env.VITE_FILE_BASE || "http://localhost:5000/uploads";
 
 // ✅ Get all transcriptions
 export async function fetchTranscriptions() {
@@ -40,7 +41,7 @@ export async function getTranscription(id) {
 
 // ✅ Build URL for audio playback
 export function getFileUrl(filename) {
-  return `http://localhost:5000/uploads/${filename}`;
+  return `${FILE_BASE}/${filename}`;
 }
 
 

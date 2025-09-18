@@ -23,6 +23,11 @@ require("./config/passport");
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes);
 
+// Health check route (root)
+app.get("/", (req, res) => {
+  res.json({ message: "✅ Speech-to-Text API is running" });
+});
+
 
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/speechtotext';
